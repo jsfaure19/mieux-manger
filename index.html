@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mieux manger — mes repas</title>
+  <meta name="description" content="Mes idées de repas équilibrés, avec recherche et liste de courses." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>" />
+
+  <!-- React via CDN : aucun build nécessaire -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #f6f7f5;
+      --card: #ffffff;
+      --ink: #1f2a24;
+      --muted: #6b7770;
+      --accent: #2e7d52;
+      --accent-soft: #e3f1e9;
+      --border: #e4e8e5;
+      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 6px 18px rgba(0,0,0,.04);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14181a;
+        --card: #1d2326;
+        --ink: #e8eeea;
+        --muted: #9aa8a1;
+        --accent: #57c98a;
+        --accent-soft: #1f3a2c;
+        --border: #2b3438;
+        --shadow: 0 1px 3px rgba(0,0,0,.3);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 80px; }
+    header h1 { font-size: 1.9rem; margin: 0 0 4px; letter-spacing: -.02em; }
+    header p { color: var(--muted); margin: 0 0 20px; }
+
+    .search {
+      position: sticky; top: 0; z-index: 10;
+      padding: 12px 0; margin-bottom: 4px;
+      background: linear-gradient(var(--bg) 70%, transparent);
+    }
+    .search input {
+      width: 100%; padding: 14px 16px; font-size: 1rem;
+      border: 1px solid var(--border); border-radius: 12px;
+      background: var(--card); color: var(--ink); box-shadow: var(--shadow);
+      outline: none;
+    }
+    .search input:focus { border-color: var(--accent); }
+
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 20px; }
+    .chip {
+      border: 1px solid var(--border); background: var(--card); color: var(--ink);
+      padding: 7px 14px; border-radius: 999px; font-size: .88rem; cursor: pointer;
+      transition: all .12s ease;
+    }
+    .chip:hover { border-color: var(--accent); }
+    .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .count { color: var(--muted); font-size: .85rem; margin-bottom: 14px; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .meal {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px; box-shadow: var(--shadow);
+    }
+    .meal h3 { margin: 0 0 6px; font-size: 1.08rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .cat { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--accent);
+           background: var(--accent-soft); padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+    .new { font-size: .7rem; background: #f4c542; color: #3a2e00; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+    .meal ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: .92rem; }
+    .meal li { margin: 2px 0; }
+    mark { background: #ffe27a; color: inherit; border-radius: 3px; padding: 0 1px; }
+
+    .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+
+    .base { margin-top: 48px; }
+    .base h2 { font-size: 1.3rem; margin-bottom: 4px; }
+    .base .sub { color: var(--muted); margin: 0 0 16px; font-size: .92rem; }
+    .base-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 12px; }
+    .base-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+    .base-card h4 { margin: 0 0 8px; font-size: .95rem; }
+    .base-card ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: .9rem; }
+    footer { margin-top: 50px; color: var(--muted); font-size: .82rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    // ─────────────────────────────────────────────────────────────
+    //  TES REPAS — modifie / ajoute librement ici.
+    //  Chaque repas : { name, cat, ingredients: [...], isNew? }
+    //  "isNew: true" = idée ajoutée en plus (le badge "nouveau").
+    // ─────────────────────────────────────────────────────────────
+    const MEALS = [
+      // Poulet
+      { cat: "Poulet", name: "Poulet curry riz", ingredients: ["Blancs de poulet", "Riz basmati", "Curry", "Oignons", "Crème légère"] },
+      { cat: "Poulet", name: "Poulet paprika pommes de terre", ingredients: ["Blancs de poulet", "Pommes de terre", "Paprika", "Salade verte"] },
+      { cat: "Poulet", name: "Poulet tex mex", ingredients: ["Blancs de poulet", "Riz", "Poivrons", "Oignons", "Épices mexicaines"] },
+      { cat: "Poulet", name: "Wrap poulet", ingredients: ["Tortillas complètes", "Poulet", "Tomates", "Salade", "Fromage blanc"] },
+      { cat: "Poulet", name: "Poulet rôti légumes", ingredients: ["Blancs de poulet", "Courgettes", "Carottes", "Oignons", "Huile d'olive"], isNew: true },
+      { cat: "Poulet", name: "Salade poulet avocat", ingredients: ["Poulet", "Salade", "Avocat", "Tomates", "Maïs"], isNew: true },
+
+      // Steak haché 5%
+      { cat: "Steak haché", name: "Steak + pommes de terre", ingredients: ["Steak haché 5%", "Pommes de terre", "Salade"] },
+      { cat: "Steak haché", name: "Burger maison", ingredients: ["Steak haché 5%", "Pain burger complet", "Tomates", "Salade", "Cornichons"] },
+      { cat: "Steak haché", name: "Hachis parmentier léger", ingredients: ["Viande hachée 5%", "Pommes de terre", "Oignons", "Œufs"] },
+
+      // Œufs
+      { cat: "Œufs", name: "Omelette jambon fromage", ingredients: ["Œufs", "Jambon", "Emmental râpé", "Salade"] },
+      { cat: "Œufs", name: "Salade de pommes de terre", ingredients: ["Pommes de terre", "Œufs", "Cornichons", "Tomates"] },
+      { cat: "Œufs", name: "Tortilla espagnole", ingredients: ["Œufs", "Pommes de terre", "Oignons"] },
+      { cat: "Œufs", name: "Shakshuka", ingredients: ["Œufs", "Tomates concassées", "Poivrons", "Oignons", "Épices"], isNew: true },
+
+      // Dinde
+      { cat: "Dinde", name: "Escalope de dinde riz", ingredients: ["Escalopes de dinde", "Riz", "Courgettes"] },
+      { cat: "Dinde", name: "Dinde moutarde", ingredients: ["Escalopes de dinde", "Moutarde", "Pommes de terre"] },
+      { cat: "Dinde", name: "Boulettes de dinde tomate", ingredients: ["Dinde hachée", "Coulis tomate", "Oignons", "Riz ou pâtes"], isNew: true },
+
+      // Chili
+      { cat: "Chili", name: "Chili classique", ingredients: ["Viande hachée 5%", "Haricots rouges", "Tomates concassées", "Oignons"] },
+      { cat: "Chili", name: "Chili avec riz", ingredients: ["Viande hachée 5%", "Haricots rouges", "Tomates concassées", "Oignons", "Riz"] },
+
+      // Pâtes
+      { cat: "Pâtes", name: "Pâtes bolognaise légère", ingredients: ["Pâtes complètes", "Viande hachée 5%", "Coulis tomate", "Oignons"] },
+      { cat: "Pâtes", name: "Pâtes carbonara revisitées", ingredients: ["Pâtes", "Lardons allégés", "Œufs", "Parmesan"] },
+      { cat: "Pâtes", name: "Pâtes thon tomate", ingredients: ["Pâtes complètes", "Thon", "Coulis tomate", "Oignons", "Ail"], isNew: true },
+
+      // Riz
+      { cat: "Riz", name: "Riz cantonais maison", ingredients: ["Riz", "Œufs", "Jambon", "Petits pois"] },
+      { cat: "Riz", name: "Riz poulet coco léger", ingredients: ["Riz", "Poulet", "Lait de coco léger", "Curry"] },
+
+      // Poisson
+      { cat: "Poisson", name: "Saumon riz brocoli", ingredients: ["Pavé de saumon", "Riz basmati", "Brocoli", "Citron"], isNew: true },
+      { cat: "Poisson", name: "Cabillaud pommes de terre", ingredients: ["Cabillaud", "Pommes de terre", "Courgettes", "Herbes"], isNew: true },
+
+      // Salades repas
+      { cat: "Salades repas", name: "Salade complète", ingredients: ["Salade", "Tomates", "Œufs", "Jambon", "Pommes de terre"] },
+      { cat: "Salades repas", name: "Salade César revisitée", ingredients: ["Salade", "Poulet", "Parmesan", "Croûtons (peu)"] },
+      { cat: "Salades repas", name: "Buddha bowl", ingredients: ["Riz ou quinoa", "Poulet ou œufs", "Avocat", "Carottes", "Pois chiches"], isNew: true },
+
+      // Repas ultra simples
+      { cat: "Ultra simple", name: "Croque-monsieur + salade", ingredients: ["Pain de mie complet", "Jambon", "Emmental", "Salade"] },
+      { cat: "Ultra simple", name: "Jambon pommes de terre", ingredients: ["Jambon blanc", "Pommes de terre", "Salade"] },
+      { cat: "Ultra simple", name: "Assiette froide", ingredients: ["Jambon", "Œufs", "Tomates", "Pain complet"] },
+    ];
+
+    // Liste de courses de base à toujours avoir
+    const BASE = [
+      { title: "Protéines", items: ["Œufs", "Blancs de poulet", "Escalopes de dinde", "Steak haché 5%", "Jambon blanc", "Skyr"] },
+      { title: "Féculents", items: ["Riz basmati", "Pâtes complètes", "Pommes de terre", "Tortillas complètes", "Pain complet"] },
+      { title: "Légumes", items: ["Tomates", "Concombres", "Salade", "Courgettes", "Carottes", "Poivrons", "Oignons"] },
+      { title: "Fruits", items: ["Pommes", "Poires", "Nectarines", "Fraises", "Pastèque"] },
+      { title: "Goûter", items: ["Skyr", "Chocolat noir 70-85 %", "Noix de coco râpée non sucrée", "Amandes"] },
+    ];
+
+    const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    function Highlight({ text, query }) {
+      if (!query) return text;
+      const i = norm(text).indexOf(norm(query));
+      if (i === -1) return text;
+      return (<>{text.slice(0, i)}<mark>{text.slice(i, i + query.length)}</mark>{text.slice(i + query.length)}</>);
+    }
+
+    function App() {
+      const [query, setQuery] = useState("");
+      const [cat, setCat] = useState("Tout");
+
+      const cats = useMemo(() => ["Tout", ...Array.from(new Set(MEALS.map(m => m.cat)))], []);
+
+      const filtered = useMemo(() => {
+        const q = norm(query.trim());
+        return MEALS.filter(m => {
+          if (cat !== "Tout" && m.cat !== cat) return false;
+          if (!q) return true;
+          const hay = norm(m.name + " " + m.cat + " " + m.ingredients.join(" "));
+          return hay.includes(q);
+        });
+      }, [query, cat]);
+
+      return (
+        <div className="wrap">
+          <header>
+            <h1>🍽️ Mes repas</h1>
+            <p>Recherche un plat ou un ingrédient pour choisir quoi manger.</p>
+          </header>
+
+          <div className="search">
+            <input
+              type="search"
+              placeholder="Rechercher… (ex : poulet, riz, œufs, rapide)"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          <div className="filters">
+            {cats.map(c => (
+              <button
+                key={c}
+                className={"chip" + (cat === c ? " active" : "")}
+                onClick={() => setCat(c)}
+              >{c}</button>
+            ))}
+          </div>
+
+          <div className="count">{filtered.length} repas{filtered.length > 1 ? "" : ""}</div>
+
+          {filtered.length === 0 ? (
+            <div className="empty">Aucun repas ne correspond à « {query} ».</div>
+          ) : (
+            <div className="grid">
+              {filtered.map((m, i) => (
+                <div className="meal" key={i}>
+                  <h3>
+                    <Highlight text={m.name} query={query} />
+                    <span className="cat">{m.cat}</span>
+                    {m.isNew && <span className="new">idée +</span>}
+                  </h3>
+                  <ul>
+                    {m.ingredients.map((ing, j) => (
+                      <li key={j}><Highlight text={ing} query={query} /></li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <section className="base">
+            <h2>🛒 Courses de base à toujours avoir</h2>
+            <p className="sub">Le placard idéal pour improviser n'importe quel repas.</p>
+            <div className="base-grid">
+              {BASE.map((b, i) => (
+                <div className="base-card" key={i}>
+                  <h4>{b.title}</h4>
+                  <ul>{b.items.map((it, j) => <li key={j}>{it}</li>)}</ul>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <footer>
+            Mieux manger · {MEALS.length} repas · page mise à jour à la main dans <code>index.html</code>
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
